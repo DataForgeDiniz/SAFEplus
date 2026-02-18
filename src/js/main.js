@@ -1,5 +1,5 @@
 /************************************************************
- * SAFEplus – main.js (Supabase + Sync + Restore)
+ * SAFEplus – main.js (Supabase + Sync + Restore + Status)
  ************************************************************/
 
 /* 4) Supabase */
@@ -30,6 +30,10 @@ const els = {
   filter:  document.getElementById('filterQuery'),
   dark:    document.getElementById('btn-dark'),
   restore: document.getElementById('btn-restore'),
+
+  // Status de conexão
+  connStatus: document.getElementById('connStatus'),
+  connDot:    document.getElementById('connDot'),
 };
 
 const modal = document.getElementById('modalItem');
@@ -46,6 +50,13 @@ const m = {
   del:   document.getElementById('btnDelete'),
 };
 
+// Auth DOM
+const authEmail    = document.getElementById('authEmail');
+const authPassword = document.getElementById('authPassword');
+const btnSignUp    = document.getElementById('btnSignUp');
+const btnSignIn    = document.getElementById('btnSignIn');
+const btnSignOut   = document.getElementById('btnSignOut');
+
 let editingId = null;
 
 /* Utils */
@@ -56,9 +67,41 @@ function gen(len=16){
 }
 function toggleDark(){ document.documentElement.classList.toggle('dark'); }
 
-async function getCurrentUserId() {
+async function getCurrentUser() {
   const { data: { user } } = await supabase.auth.getUser();
+  return user || null;
+}
+async function getCurrentUserId() {
+  const user = await getCurrentUser();
   return user?.id || null;
+}
+
+/* ======= UI Status de Conexão ======= */
+function setConnectedUI(isConnected, email=null) {
+  if (!els.connStatus || !els.connDot) return;
+  // Texto
+  els.connStatus.childNodes.forEach(() => {}); // noop para garantir ref
+  els.connStatus.lastChild.nodeValue = ''; // limpa texto anterior se existir
+  els.connStatus.innerHTML = `
+    <span id="connDot" class="inline-block size-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}"></span>
+    ${isConnected ? `Conectado${email ? ` (${email})` : ''}` : 'Desconectado'}
+  `;
+  // Botões dependentes de auth
+  if (els.restore) {
+    els.restore.disabled = !isConnected;
+  }
+  if (btnSignOut) {
+    btnSignOut.disabled = !isConnected;
+  }
+}
+async function refreshAuthStatus(explicitSession=null) {
+  let user = null;
+  if (explicitSession?.user) {
+    user = explicitSession.user;
+  } else {
+    user = await getCurrentUser();
+  }
+  setConnectedUI(!!user, user?.email ?? null);
 }
 
 /* Core local */
@@ -90,6 +133,9 @@ async function unlock(pwd){
     els.count.textContent = String(session.items.length);
     els.panel.classList.add('hidden');
     els.list.classList.remove('hidden');
+
+    // Se usuário estiver autenticado, sincroniza ao desbloquear
+    await syncVaultToSupabase();
   }catch{
     alert('Senha mestre incorreta.');
   }
@@ -194,6 +240,7 @@ async function pullVaultFromSupabase(){
   const { data, error } = await supabase
     .from('safeplus.vaults')
     .select('ciphertext')
+    .eq('user_id', userId)     // <— garante que puxa o vault do usuário logado
     .single();
   if(error){ console.error('Erro ao ler vault:', error); return null; }
   return data?.ciphertext || null;
@@ -212,8 +259,8 @@ els.unlock?.addEventListener('click', ()=>{
   if(!p) return alert('Informe a senha mestre.');
   unlock(p);
 });
-els.add?.addEventListener('click', ()=> openModal(null));
-m.gen?.addEventListener('click', ()=> m.pass.value = gen());
+els.add?.addEventListener('click', () => openModal(null));
+m.gen?.addEventListener('click', () => m.pass.value = gen());
 m.save?.addEventListener('click', async ()=>{
   const payload = {
     id:   editingId || crypto.randomUUID(),
@@ -264,11 +311,6 @@ els.dark?.addEventListener('click', toggleDark);
 els.restore?.addEventListener('click', restoreFromServerAndUnlock);
 
 /* Auth (e‑mail/senha) */
-const authEmail    = document.getElementById('authEmail');
-const authPassword = document.getElementById('authPassword');
-const btnSignUp    = document.getElementById('btnSignUp');
-const btnSignIn    = document.getElementById('btnSignIn');
-
 btnSignUp?.addEventListener('click', async ()=>{
   const email = authEmail.value.trim();
   const pass  = authPassword.value.trim();
@@ -285,13 +327,23 @@ btnSignIn?.addEventListener('click', async ()=>{
   if(error) return alert('Falha ao entrar: ' + error.message);
   alert('Autenticado com sucesso!');
 });
+btnSignOut?.addEventListener('click', async ()=>{
+  const { error } = await supabase.auth.signOut();
+  if(error) return alert('Erro ao sair: ' + error.message);
+  alert('Sessão encerrada.');
+});
+
+/* Listener de auth para atualizar status conectado em tempo real */
+supabase.auth.onAuthStateChange(async (_event, s) => {
+  await refreshAuthStatus(s);
+  // Caso o usuário entre e o cofre já esteja desbloqueado, sincroniza
+  if (s?.user && session.key) {
+    await syncVaultToSupabase();
+  }
+});
 
 /* Inicialização */
-lock();
-
-/* (Opcional) Helpers para itens no Supabase (sync granular) */
-// async function makeSearchTag(text) { /* ... */ }
-// async function saveItemCipher(itemCipher, searchText=null) { /* ... */ }
-// async function listItemCiphers() { /* ... */ }
-// async function updateItemCipher(id, itemCipher, searchText=null) { /* ... */ }
-// async function deleteItemCipher(id) { /* ... */ }
+(async function init(){
+  await refreshAuthStatus();
+  await lock();
+})();
