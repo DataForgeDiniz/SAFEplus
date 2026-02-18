@@ -62,7 +62,8 @@
                 Entrar
               </button>
             </div>
-            <button id="btnSignOut"
+            <!-- type="button" evita submit/navegação -->
+            <button id="btnSignOut" type="button"
                     class="px-3 py-2 rounded-md bg-white/10 hover:bg-white/15 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                     disabled>
               Sair
@@ -80,9 +81,9 @@
           <div class="text-sm opacity-80">Itens: <span id="vaultCount" class="font-medium">0</span></div>
           <div class="text-sm opacity-80">
             Conexão:
-            <span id="connStatus" class="inline-flex items-center gap-2 font-medium">
+            <span class="inline-flex items-center gap-2 font-medium">
               <span id="connDot" class="inline-block size-2 rounded-full bg-red-500"></span>
-              Desconectado
+              <span id="connText">Desconectado</span>
             </span>
           </div>
 
