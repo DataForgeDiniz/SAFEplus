@@ -32,8 +32,8 @@ const els = {
   restore: document.getElementById('btn-restore'),
 
   // Status de conexão
-  connStatus: document.getElementById('connStatus'),
-  connDot:    document.getElementById('connDot'),
+  connDot:  document.getElementById('connDot'),
+  connText: document.getElementById('connText'),
 };
 
 const modal = document.getElementById('modalItem');
@@ -60,12 +60,12 @@ const btnSignOut   = document.getElementById('btnSignOut');
 let editingId = null;
 
 /* Utils */
-function gen(len=16){
-  const c='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%&*?';
-  let o=''; for(let i=0;i<len;i++) o+=c[Math.floor(Math.random()*c.length)];
+function gen(len = 16) {
+  const c = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%&*?';
+  let o = ''; for (let i = 0; i < len; i++) o += c[Math.floor(Math.random() * c.length)];
   return o;
 }
-function toggleDark(){ document.documentElement.classList.toggle('dark'); }
+function toggleDark() { document.documentElement.classList.toggle('dark'); }
 
 async function getCurrentUser() {
   const { data: { user } } = await supabase.auth.getUser();
@@ -77,45 +77,42 @@ async function getCurrentUserId() {
 }
 
 /* ======= UI Status de Conexão ======= */
-function setConnectedUI(isConnected, email=null) {
-  if (!els.connStatus || !els.connDot) return;
-  // Texto
-  els.connStatus.childNodes.forEach(() => {}); // noop para garantir ref
-  els.connStatus.lastChild.nodeValue = ''; // limpa texto anterior se existir
-  els.connStatus.innerHTML = `
-    <span id="connDot" class="inline-block size-2 rounded-full ${isConnected ? 'bg-green-500' : 'bg-red-500'}"></span>
-    ${isConnected ? `Conectado${email ? ` (${email})` : ''}` : 'Desconectado'}
-  `;
-  // Botões dependentes de auth
-  if (els.restore) {
-    els.restore.disabled = !isConnected;
+function setConnectedUI(isConnected, email = null) {
+  // ponto colorido
+  if (els.connDot) {
+    els.connDot.classList.toggle('bg-green-500', isConnected);
+    els.connDot.classList.toggle('bg-red-500', !isConnected);
   }
-  if (btnSignOut) {
-    btnSignOut.disabled = !isConnected;
+  // texto
+  if (els.connText) {
+    els.connText.textContent = isConnected
+      ? `Conectado${email ? ` (${email})` : ''}`
+      : 'Desconectado';
   }
+  // botões dependentes
+  if (els.restore) els.restore.disabled = !isConnected;
+  if (btnSignOut) btnSignOut.disabled = !isConnected;
 }
-async function refreshAuthStatus(explicitSession=null) {
-  let user = null;
-  if (explicitSession?.user) {
-    user = explicitSession.user;
-  } else {
-    user = await getCurrentUser();
-  }
+
+async function refreshAuthStatus(explicitSession = null) {
+  // usa getSession para refletir estado pós signOut
+  const current = explicitSession ?? (await supabase.auth.getSession()).data.session;
+  const user = current?.user ?? null;
   setConnectedUI(!!user, user?.email ?? null);
 }
 
 /* Core local */
-async function lock(){
-  session = { key:null, items:[] };
+async function lock() {
+  session = { key: null, items: [] };
   els.mode.textContent  = 'Bloqueado';
   els.count.textContent = '0';
   els.panel.classList.remove('hidden');
   els.list.classList.add('hidden');
 }
 
-async function unlock(pwd){
+async function unlock(pwd) {
   let meta = load(); // { salt, iter, data:{iv,ct} }
-  if(!meta){
+  if (!meta) {
     const salt = randSalt();
     const key  = await deriveKey(pwd, salt);
     const data = await encryptJson(key, []);
@@ -123,8 +120,8 @@ async function unlock(pwd){
     save(meta);
   }
   const salt = b64ToBuf(meta.salt);
-  const key  = await deriveKey(pwd, salt, meta.iter||200000);
-  try{
+  const key  = await deriveKey(pwd, salt, meta.iter || 200000);
+  try {
     const items = await decryptJson(key, meta.data);
     session.key   = key;
     session.items = items || [];
@@ -136,44 +133,44 @@ async function unlock(pwd){
 
     // Se usuário estiver autenticado, sincroniza ao desbloquear
     await syncVaultToSupabase();
-  }catch{
+  } catch {
     alert('Senha mestre incorreta.');
   }
 }
 
 /* 4.2) Sync no Supabase */
-async function syncVaultToSupabase(){
+async function syncVaultToSupabase() {
   const userId = await getCurrentUserId();
-  if(!userId) return;          // requer login
+  if (!userId) return; // requer login
   const meta = load();
-  if(!meta) return;
+  if (!meta) return;
   const { error } = await supabase
     .from('safeplus.vaults')
     .upsert({ user_id: userId, ciphertext: meta })
     .eq('user_id', userId);
-  if(error) console.error('Erro ao sincronizar vault:', error);
+  if (error) console.error('Erro ao sincronizar vault:', error);
 }
 
-async function persist(){
+async function persist() {
   const meta = load();
-  if(!session.key) return;
+  if (!session.key) return;
   const data = await encryptJson(session.key, session.items);
-  save({ ...(meta||{}), data });
+  save({ ...(meta || {}), data });
   els.count.textContent = String(session.items.length);
   // dispara sync
   await syncVaultToSupabase();
 }
 
 /* Render */
-function render(){
-  const q = (els.filter.value||'').toLowerCase();
+function render() {
+  const q = (els.filter.value || '').toLowerCase();
   els.list.innerHTML = '';
 
   const items = session.items.filter(i =>
     i.name?.toLowerCase().includes(q) || i.user?.toLowerCase().includes(q)
   );
 
-  for(const it of items){
+  for (const it of items) {
     const card = document.createElement('div');
     card.className = 'card rounded-xl p-4 space-y-3';
     card.innerHTML = `
@@ -195,23 +192,23 @@ function render(){
   }
 
   // ações
-  els.list.querySelectorAll('.btn-copy').forEach(b => b.addEventListener('click', async e=>{
+  els.list.querySelectorAll('.btn-copy').forEach(b => b.addEventListener('click', async e => {
     const id = e.currentTarget.getAttribute('data-id');
     const it = session.items.find(x => x.id === id);
-    if(!it) return;
-    try{
+    if (!it) return;
+    try {
       await navigator.clipboard.writeText(it.pass || '');
       e.currentTarget.textContent = 'Copiado!';
-      setTimeout(()=> e.currentTarget.textContent='Copiar Senha', 1200);
-    }catch{ alert('Seu navegador bloqueou a cópia.'); }
+      setTimeout(() => e.currentTarget.textContent = 'Copiar Senha', 1200);
+    } catch { alert('Seu navegador bloqueou a cópia.'); }
   }));
-  els.list.querySelectorAll('.btn-reveal').forEach(b => b.addEventListener('click', e=>{
+  els.list.querySelectorAll('.btn-reveal').forEach(b => b.addEventListener('click', e => {
     const id = e.currentTarget.getAttribute('data-id');
     const it = session.items.find(x => x.id === id);
-    if(!it) return;
+    if (!it) return;
     alert(`Senha de ${it.name}:\n\n${it.pass}`);
   }));
-  els.list.querySelectorAll('.btn-edit').forEach(b => b.addEventListener('click', e=>{
+  els.list.querySelectorAll('.btn-edit').forEach(b => b.addEventListener('click', e => {
     const id = e.currentTarget.getAttribute('data-id');
     const it = session.items.find(x => x.id === id);
     openModal(it);
@@ -219,7 +216,7 @@ function render(){
 }
 
 /* Modal */
-function openModal(it){
+function openModal(it) {
   editingId = it?.id || null;
   m.title.textContent = editingId ? 'Editar Item' : 'Novo Item';
   m.name.value = it?.name || '';
@@ -231,37 +228,37 @@ function openModal(it){
   m.del.classList.toggle('hidden', !editingId);
   modal.showModal();
 }
-function closeModal(){ modal.close(); }
+function closeModal() { modal.close(); }
 
 /* 4.3) Restaurar do servidor */
-async function pullVaultFromSupabase(){
+async function pullVaultFromSupabase() {
   const userId = await getCurrentUserId();
-  if(!userId) return null;
+  if (!userId) return null;
   const { data, error } = await supabase
     .from('safeplus.vaults')
     .select('ciphertext')
-    .eq('user_id', userId)     // <— garante que puxa o vault do usuário logado
+    .eq('user_id', userId)     // apenas do usuário logado
     .single();
-  if(error){ console.error('Erro ao ler vault:', error); return null; }
+  if (error) { console.error('Erro ao ler vault:', error); return null; }
   return data?.ciphertext || null;
 }
-async function restoreFromServerAndUnlock(){
+async function restoreFromServerAndUnlock() {
   const remoteMeta = await pullVaultFromSupabase();
-  if(!remoteMeta) return alert('Não há cofre no servidor para este usuário.');
+  if (!remoteMeta) return alert('Não há cofre no servidor para este usuário.');
   save(remoteMeta);
   alert('Cofre baixado! Agora desbloqueie com a sua senha mestre.');
   await lock();
 }
 
 /* Eventos UI */
-els.unlock?.addEventListener('click', ()=>{
+els.unlock?.addEventListener('click', () => {
   const p = els.master.value.trim();
-  if(!p) return alert('Informe a senha mestre.');
+  if (!p) return alert('Informe a senha mestre.');
   unlock(p);
 });
 els.add?.addEventListener('click', () => openModal(null));
 m.gen?.addEventListener('click', () => m.pass.value = gen());
-m.save?.addEventListener('click', async ()=>{
+m.save?.addEventListener('click', async () => {
   const payload = {
     id:   editingId || crypto.randomUUID(),
     name: m.name.value.trim(),
@@ -271,9 +268,9 @@ m.save?.addEventListener('click', async ()=>{
     icon: m.icon.value.trim(),
     fav:  m.fav.checked
   };
-  if(editingId){
+  if (editingId) {
     const i = session.items.findIndex(x => x.id === editingId);
-    if(i >= 0) session.items[i] = payload;
+    if (i >= 0) session.items[i] = payload;
   } else {
     session.items.unshift(payload);
   }
@@ -281,23 +278,23 @@ m.save?.addEventListener('click', async ()=>{
   render();
   closeModal();
 });
-m.del?.addEventListener('click', async ()=>{
-  if(!editingId) return;
-  if(!confirm('Excluir este item?')) return;
+m.del?.addEventListener('click', async () => {
+  if (!editingId) return;
+  if (!confirm('Excluir este item?')) return;
   session.items = session.items.filter(x => x.id !== editingId);
   await persist();
   render();
   closeModal();
 });
 els.lock?.addEventListener('click', lock);
-els.exp?.addEventListener('click', ()=>{
+els.exp?.addEventListener('click', () => {
   const blob = new Blob([exportVault()], { type: 'application/json' });
   const url  = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = 'safeplus_export.json'; a.click();
   URL.revokeObjectURL(url);
 });
-els.imp?.addEventListener('click', async ()=>{
+els.imp?.addEventListener('click', async () => {
   const [h] = await window.showOpenFilePicker({
     types:[{ description:'JSON', accept:{ 'application/json':['.json'] } }]
   });
@@ -311,39 +308,52 @@ els.dark?.addEventListener('click', toggleDark);
 els.restore?.addEventListener('click', restoreFromServerAndUnlock);
 
 /* Auth (e‑mail/senha) */
-btnSignUp?.addEventListener('click', async ()=>{
+btnSignUp?.addEventListener('click', async () => {
   const email = authEmail.value.trim();
   const pass  = authPassword.value.trim();
-  if(!email || !pass) return alert('Preencha email e senha.');
+  if (!email || !pass) return alert('Preencha email e senha.');
   const { error } = await supabase.auth.signUp({ email, password: pass });
-  if(error) return alert('Falha ao criar conta: ' + error.message);
+  if (error) return alert('Falha ao criar conta: ' + error.message);
   alert('Conta criada! Verifique seu email (se exigida confirmação).');
 });
-btnSignIn?.addEventListener('click', async ()=>{
+btnSignIn?.addEventListener('click', async () => {
   const email = authEmail.value.trim();
   const pass  = authPassword.value.trim();
-  if(!email || !pass) return alert('Preencha email e senha.');
+  if (!email || !pass) return alert('Preencha email e senha.');
   const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
-  if(error) return alert('Falha ao entrar: ' + error.message);
+  if (error) return alert('Falha ao entrar: ' + error.message);
   alert('Autenticado com sucesso!');
 });
-btnSignOut?.addEventListener('click', async ()=>{
+btnSignOut?.addEventListener('click', async (e) => {
+  e.preventDefault();
+  btnSignOut.disabled = true; // feedback imediato
   const { error } = await supabase.auth.signOut();
-  if(error) return alert('Erro ao sair: ' + error.message);
+  if (error) {
+    alert('Erro ao sair: ' + error.message);
+    btnSignOut.disabled = false;
+    return;
+  }
+  // Bloqueia o cofre local ao sair
+  await lock();
+  // Limpa campos de login (opcional)
+  if (authEmail) authEmail.value = '';
+  if (authPassword) authPassword.value = '';
+  // Reflete estado
+  await refreshAuthStatus();
   alert('Sessão encerrada.');
 });
 
 /* Listener de auth para atualizar status conectado em tempo real */
-supabase.auth.onAuthStateChange(async (_event, s) => {
-  await refreshAuthStatus(s);
+supabase.auth.onAuthStateChange(async (_event, authSession) => {
+  await refreshAuthStatus(authSession);
   // Caso o usuário entre e o cofre já esteja desbloqueado, sincroniza
-  if (s?.user && session.key) {
+  if (authSession?.user && session.key) {
     await syncVaultToSupabase();
   }
 });
 
 /* Inicialização */
-(async function init(){
+(async function init() {
   await refreshAuthStatus();
   await lock();
 })();
