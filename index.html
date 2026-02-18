@@ -62,6 +62,11 @@
                 Entrar
               </button>
             </div>
+            <button id="btnSignOut"
+                    class="px-3 py-2 rounded-md bg-white/10 hover:bg-white/15 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled>
+              Sair
+            </button>
           </div>
           <p class="mt-2 text-xs opacity-70">
             Após logar, seu cofre cifrado pode ser sincronizado no Supabase (RLS por usuário).
@@ -73,11 +78,20 @@
           <h2 class="font-semibold mb-2">Status do Cofre</h2>
           <div class="text-sm opacity-80">Modo: <span id="vaultMode" class="font-medium">Bloqueado</span></div>
           <div class="text-sm opacity-80">Itens: <span id="vaultCount" class="font-medium">0</span></div>
+          <div class="text-sm opacity-80">
+            Conexão:
+            <span id="connStatus" class="inline-flex items-center gap-2 font-medium">
+              <span id="connDot" class="inline-block size-2 rounded-full bg-red-500"></span>
+              Desconectado
+            </span>
+          </div>
 
           <div class="mt-3 grid grid-cols-2 gap-2">
             <button id="btn-lock" class="px-3 py-2 rounded-md bg-white/10 hover:bg-white/15 text-sm">Bloquear</button>
             <button id="btn-export" class="px-3 py-2 rounded-md bg-white/10 hover:bg-white/15 text-sm">Exportar</button>
-            <button id="btn-restore" class="col-span-2 px-3 py-2 rounded-md bg-white/10 hover:bg-white/15 text-sm">
+            <button id="btn-restore"
+                    class="col-span-2 px-3 py-2 rounded-md bg-white/10 hover:bg-white/15 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                    disabled>
               Restaurar do servidor
             </button>
           </div>
