@@ -22,7 +22,7 @@
     }
   </script>
 
-  <!-- Estilos extras -->
+  <!-- Estilos extras (opcional) -->
   <link rel="stylesheet" href="src/css/app.css" />
 </head>
 <body class="h-full bg-slate-950 text-slate-100">
@@ -32,48 +32,63 @@
       <div class="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
         <div class="text-2xl">🛡️</div>
         <div class="font-semibold tracking-tight">SAFEplus</div>
+
         <div class="ml-auto flex items-center gap-2">
+          <!-- Badge com e-mail do usuário autenticado -->
+          <span id="userEmailBadge" class="hidden text-xs px-2 py-1 rounded-md bg-white/10 border border-white/10"></span>
+
           <button id="btn-dark" class="px-3 py-1.5 text-sm rounded-md bg-white/10 hover:bg-white/15">
             Alternar tema
           </button>
-          <span class="text-xs opacity-60">Projeto hobby</span>
+          <!-- Sair só aparece autenticado -->
+          <button id="btnSignOut" type="button"
+                  class="hidden px-3 py-1.5 text-sm rounded-md bg-white/10 hover:bg-white/15">
+            Sair
+          </button>
         </div>
       </div>
     </header>
 
-    <!-- Main -->
-    <main class="max-w-6xl mx-auto px-4 py-8 grid md:grid-cols-12 gap-6">
-      <aside class="md:col-span-4 lg:col-span-3 space-y-4">
-        <!-- Autenticação -->
-        <section class="rounded-xl border border-white/10 p-4 bg-white/5">
-          <h2 class="font-semibold mb-2">Entrar no SAFEplus</h2>
-          <div class="grid gap-3">
-            <input id="authEmail" type="email" placeholder="Email"
-                   class="w-full rounded-md bg-white/10 border border-white/10 px-3 py-2 text-sm" />
-            <input id="authPassword" type="password" placeholder="Senha"
-                   class="w-full rounded-md bg-white/10 border border-white/10 px-3 py-2 text-sm" />
-            <div class="flex gap-2">
-              <button id="btnSignUp"
-                      class="w-1/2 px-3 py-2 rounded-md bg-white/10 hover:bg-white/15 text-sm">
-                Criar conta
-              </button>
-              <button id="btnSignIn"
-                      class="w-1/2 px-3 py-2 rounded-md bg-brand-600 hover:bg-brand-700 text-sm text-white">
-                Entrar
-              </button>
-            </div>
-            <!-- type="button" evita submit/navegação -->
-            <button id="btnSignOut" type="button"
-                    class="px-3 py-2 rounded-md bg-white/10 hover:bg-white/15 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
-                    disabled>
-              Sair
+    <!-- TELA DE AUTENTICAÇÃO (full-screen, aparece quando não autenticado) -->
+    <section id="authScreen" class="min-h-[calc(100vh-57px)] flex items-center justify-center px-4">
+      <div class="w-full max-w-sm rounded-2xl border border-white/10 bg-white/5 p-6 space-y-4">
+        <div class="flex items-center gap-2">
+          <div class="text-2xl">🛡️</div>
+          <h1 class="text-lg font-semibold">Entrar no SAFEplus</h1>
+        </div>
+
+        <div class="grid gap-3">
+          <input id="authEmail" type="email" inputmode="email" autocomplete="username"
+                 placeholder="Email"
+                 class="w-full rounded-md bg-white/10 border border-white/10 px-3 py-2 text-sm" />
+          <input id="authPassword" type="password" autocomplete="current-password"
+                 placeholder="Senha"
+                 class="w-full rounded-md bg-white/10 border border-white/10 px-3 py-2 text-sm" />
+          <div class="flex gap-2">
+            <button id="btnSignUp"
+                    class="w-1/2 px-3 py-2 rounded-md bg-white/10 hover:bg-white/15 text-sm">
+              Criar conta
+            </button>
+            <button id="btnSignIn"
+                    class="w-1/2 px-3 py-2 rounded-md bg-brand-600 hover:bg-brand-700 text-sm text-white">
+              Entrar
             </button>
           </div>
-          <p class="mt-2 text-xs opacity-70">
-            Após logar, seu cofre cifrado pode ser sincronizado no Supabase (RLS por usuário).
-          </p>
-        </section>
+          <button id="btnForgot"
+                  class="text-xs text-brand-200 hover:text-brand-50 text-left underline underline-offset-4">
+            Esqueci minha senha
+          </button>
+        </div>
 
+        <p class="text-xs opacity-70">
+          Seus dados são cifrados localmente (AES‑GCM). Após logar, você pode sincronizar o cofre cifrado com o Supabase.
+        </p>
+      </div>
+    </section>
+
+    <!-- APP MAIN (só aparece autenticado) -->
+    <main id="appMain" class="hidden max-w-6xl mx-auto px-4 py-8 grid md:grid-cols-12 gap-6">
+      <aside class="md:col-span-4 lg:col-span-3 space-y-4">
         <!-- Status -->
         <section class="rounded-xl border border-white/10 p-4 bg-white/5">
           <h2 class="font-semibold mb-2">Status do Cofre</h2>
@@ -128,7 +143,7 @@
             Digite sua senha mestre para acessar seus dados. No primeiro acesso, você poderá criar uma senha mestre.
           </p>
           <div class="grid sm:grid-cols-2 gap-3">
-            <input id="masterPassword" type="password" placeholder="Senha mestre"
+            <input id="masterPassword" type="password" placeholder="Senha mestre" autocomplete="new-password"
                    class="rounded-md bg-white/10 border border-white/10 px-3 py-2 text-sm focus:outline-none focus:border-brand-500" />
             <button id="btn-unlock" class="px-4 py-2 rounded-md bg-brand-600 hover:bg-brand-700">
               Desbloquear
@@ -189,10 +204,36 @@
       </form>
     </dialog>
 
+    <!-- Modal de redefinição de senha (aparece quando vem de magic link) -->
+    <dialog id="modalReset" class="backdrop:bg-black/60 rounded-2xl w-full max-w-md bg-slate-900 text-slate-100 border border-white/10">
+      <form method="dialog" class="p-6 space-y-4">
+        <div class="flex items-center justify-between">
+          <h3 class="text-lg font-semibold">Definir nova senha</h3>
+          <button class="px-2 py-1 bg-white/10 rounded-md" type="button" onclick="this.closest('dialog').close()">✕</button>
+        </div>
+        <div class="space-y-2">
+          <label class="text-sm">Nova senha</label>
+          <input id="resetNewPass" type="password" autocomplete="new-password"
+                 class="w-full rounded-md bg-white/10 border border-white/10 px-3 py-2 text-sm focus:outline-none focus:border-brand-500" />
+        </div>
+        <div class="space-y-2">
+          <label class="text-sm">Confirmar nova senha</label>
+          <input id="resetNewPass2" type="password" autocomplete="new-password"
+                 class="w-full rounded-md bg-white/10 border border-white/10 px-3 py-2 text-sm focus:outline-none focus:border-brand-500" />
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button id="btnDoReset" class="px-4 py-2 rounded-md bg-brand-600 hover:bg-brand-700">Salvar senha</button>
+        </div>
+      </form>
+    </dialog>
+
     <footer class="py-8 text-center text-xs opacity-60">
       SAFEplus — projeto pessoal • dados ficam somente no seu navegador
     </footer>
   </div>
+
+  <!-- Stack de Toasts -->
+  <div id="toastStack" class="fixed z-[999] top-4 right-4 flex flex-col gap-2"></div>
 
   <!-- App -->
   <script type="module" src="./src/js/main.js"></script>
