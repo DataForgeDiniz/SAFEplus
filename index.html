@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="pt-BR" class="h-full">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SAFEplus — Cofre de Senhas</title>
+  <meta name="description" content="SAFEplus: cofre de senhas local (projeto pessoal) com WebCrypto AES‑GCM e UI Tailwind." />
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='16' fill='%2311222b'/%3E%3Ctext x='50' y='60' font-size='48' text-anchor='middle' fill='%23fff'%3E%F0%9F%9B%A1%EF%B8%8F%3C/text%3E%3C/svg%3E">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config={darkMode:'class',theme:{extend:{colors:{brand:{50:'#ecfeff',200:'#a5f3fc',500:'#06b6d4',600:'#0891b2',700:'#0e7490'}}}}}};</script>
+  <link rel="stylesheet" href="src/css/app.css" />
+</head>
+<body class="h-full bg-slate-950 text-slate-100">
+  <div id="app" class="min-h-screen">
+    <header class="sticky top-0 z-20 backdrop-blur bg-slate-950/60 border-b border-white/10">
+      <div class="max-w-6xl mx-auto px-4 py-3 flex items-center gap-3">
+        <div class="text-2xl">🛡️</div>
+        <div class="font-semibold tracking-tight">SAFEplus</div>
+        <div class="ml-auto flex items-center gap-2">
+          <button id="btn-dark" class="px-3 py-1.5 text-sm rounded-md bg-white/10 hover:bg-white/15">Alternar tema</button>
+          <span class="text-xs opacity-60">Projeto hobby</span>
+        </div>
+      </div>
+    </header>
+
+    <main class="max-w-6xl mx-auto px-4 py-8 grid md:grid-cols-12 gap-6">
+      <aside class="md:col-span-4 lg:col-span-3 space-y-4">
+        <section class="rounded-xl border border-white/10 p-4 bg-white/5">
+          <h2 class="font-semibold mb-2">Status do Cofre</h2>
+          <div class="text-sm opacity-80">Modo: <span id="vaultMode" class="font-medium">Bloqueado</span></div>
+          <div class="text-sm opacity-80">Itens: <span id="vaultCount" class="font-medium">0</span></div>
+          <div class="mt-3 flex gap-2">
+            <button id="btn-lock" class="flex-1 px-3 py-2 rounded-md bg-white/10 hover:bg-white/15 text-sm">Bloquear</button>
+            <button id="btn-export" class="px-3 py-2 rounded-md bg-white/10 hover:bg-white/15 text-sm">Exportar</button>
+          </div>
+        </section>
+
+        <section class="rounded-xl border border-white/10 p-4 bg-white/5">
+          <h2 class="font-semibold mb-3">Filtros</h2>
+          <input id="filterQuery" placeholder="Buscar..." class="w-full rounded-md bg-white/10 border border-white/10 px-3 py-2 text-sm placeholder:text-slate-400 focus:outline-none focus:border-brand-500" />
+          <div class="mt-3 grid grid-cols-2 gap-2">
+            <button data-filter="all" class="px-3 py-2 rounded-md bg-white/10 hover:bg-white/15 text-sm">Todos</button>
+            <button data-filter="favoritos" class="px-3 py-2 rounded-md bg-white/10 hover:bg-white/15 text-sm">Favoritos</button>
+          </div>
+        </section>
+      </aside>
+
+      <section class="md:col-span-8 lg:col-span-9 space-y-4">
+        <div class="flex flex-wrap items-center gap-2">
+          <button id="btn-add" class="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm">+ Nova Senha</button>
+          <button id="btn-import" class="px-3 py-2 rounded-lg bg-white/10 hover:bg-white/15 text-sm">Importar</button>
+        </div>
+
+        <div id="panel-locked" class="rounded-xl border border-white/10 p-8 bg-white/5">
+          <h2 class="text-xl font-semibold mb-3">Desbloquear Cofre</h2>
+          <p class="text-sm opacity-80 mb-4">Digite sua senha mestre para acessar seus dados. No primeiro acesso, você poderá criar uma senha mestre.</p>
+          <div class="grid sm:grid-cols-2 gap-3">
+            <input id="masterPassword" type="password" placeholder="Senha mestre" class="rounded-md bg-white/10 border border-white/10 px-3 py-2 text-sm focus:outline-none focus:border-brand-500" />
+            <button id="btn-unlock" class="px-4 py-2 rounded-md bg-brand-600 hover:bg-brand-700">Desbloquear</button>
+          </div>
+          <p class="mt-3 text-xs opacity-60">Criptografia local com WebCrypto (AES‑GCM) e chave derivada por PBKDF2.</p>
+        </div>
+
+        <div id="vaultList" class="hidden grid sm:grid-cols-2 xl:grid-cols-3 gap-4"></div>
+      </section>
+    </main>
+
+    <dialog id="modalItem" class="backdrop:bg-black/60 rounded-2xl w-full max-w-lg bg-slate-900 text-slate-100 border border-white/10">
+      <form method="dialog" class="p-6 space-y-4">
+        <div class="flex items-center justify-between">
+          <h3 id="modalTitle" class="text-lg font-semibold">Novo Item</h3>
+          <button class="px-2 py-1 bg-white/10 rounded-md">✕</button>
+        </div>
+        <div class="grid grid-cols-6 gap-3">
+          <div class="col-span-6">
+            <label class="text-sm">Nome</label>
+            <input id="itemName" class="w-full rounded-md bg-white/10 border border-white/10 px-3 py-2 text-sm focus:outline-none focus:border-brand-500"/>
+          </div>
+          <div class="col-span-6">
+            <label class="text-sm">Usuário / Email</label>
+            <input id="itemUser" class="w-full rounded-md bg-white/10 border border-white/10 px-3 py-2 text-sm focus:outline-none focus:border-brand-500"/>
+          </div>
+          <div class="col-span-6">
+            <label class="text-sm">Senha</label>
+            <div class="flex rounded-md overflow-hidden border border-white/10">
+              <input id="itemPass" type="password" class="flex-1 bg-white/10 px-3 py-2 text-sm focus:outline-none"/>
+              <button type="button" id="btnGen" class="px-3 bg-white/10 hover:bg-white/15 text-sm">Gerar</button>
+            </div>
+          </div>
+          <div class="col-span-3">
+            <label class="text-sm">URL (opcional)</label>
+            <input id="itemUrl" class="w-full rounded-md bg-white/10 border border-white/10 px-3 py-2 text-sm focus:outline-none focus:border-brand-500"/>
+          </div>
+          <div class="col-span-3">
+            <label class="text-sm">Ícone</label>
+            <input id="itemIcon" placeholder="Ex.: 🗝️, 🐙, 🅶, 🟪" class="w-full rounded-md bg-white/10 border border-white/10 px-3 py-2 text-sm focus:outline-none focus:border-brand-500"/>
+          </div>
+          <div class="col-span-6 flex items-center gap-2">
+            <input id="itemFav" type="checkbox" class="size-4"/>
+            <label class="text-sm">Favorito</label>
+          </div>
+        </div>
+        <div class="flex justify-end gap-2 pt-2">
+          <button id="btnDelete" type="button" class="hidden px-3 py-2 rounded-md bg-red-500/20 hover:bg-red-500/30 text-red-200">Excluir</button>
+          <button id="btnSave" class="px-4 py-2 rounded-md bg-brand-600 hover:bg-brand-700">Salvar</button>
+        </div>
+      </form>
+    </dialog>
+
+    <footer class="py-8 text-center text-xs opacity-60">SAFEplus — projeto pessoal • dados ficam somente no seu navegador</footer>
+  </div>
+
+  <script type="module" src="./src/js/main.js"></script>
+</body>
+</html>
