@@ -1,43 +1,21 @@
 /************************************************************
- * SAFEplus – main.js (com Supabase + Sync + Restore)
- * Requisitos:
- *  - index.html com <script type="module" src="./src/js/main.js">
- *  - src/js/crypto.js  -> deriveKey, randSalt, encryptJson, decryptJson, bufToB64, b64ToBuf
- *  - src/js/store.js   -> load(), save(), exportVault(), importVault()
+ * SAFEplus – main.js (Supabase + Sync + Restore)
  ************************************************************/
 
-/* =========================
- * 4) Supabase (via ESM CDN)
- * ========================= */
+/* 4) Supabase */
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
-// ► URL e Publishable (anon) do seu projeto
 const SUPABASE_URL = 'https://bybkuxxwypobqzksnphi.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable_3LmwQqEruve0tSkQ_oH5wQ_SzMBNv6Z';
-
-// Cliente Supabase
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-/* =======================
- * Imports do próprio app
- * ======================= */
-import {
-  deriveKey, randSalt, encryptJson, decryptJson,
-  bufToB64, b64ToBuf
-} from './crypto.js';
+/* App imports */
+import { deriveKey, randSalt, encryptJson, decryptJson, bufToB64, b64ToBuf } from './crypto.js';
+import { load, save, exportVault, importVault } from './store.js';
 
-import {
-  load, save, exportVault, importVault
-} from './store.js';
-
-/* =======================
- * Estado de sessão local
- * ======================= */
+/* Estado */
 let session = { key: null, items: [] };
 
-/* ==============================
- * Referências de elementos (DOM)
- * ============================== */
+/* DOM */
 const els = {
   list:    document.getElementById('vaultList'),
   panel:   document.getElementById('panel-locked'),
@@ -70,47 +48,40 @@ const m = {
 
 let editingId = null;
 
-/* ================
- * Utilitários UI
- * ================ */
-function gen(len = 16) {
-  const c = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%&*?';
-  let o = '';
-  for (let i = 0; i < len; i++) o += c[Math.floor(Math.random() * c.length)];
+/* Utils */
+function gen(len=16){
+  const c='ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%&*?';
+  let o=''; for(let i=0;i<len;i++) o+=c[Math.floor(Math.random()*c.length)];
   return o;
 }
+function toggleDark(){ document.documentElement.classList.toggle('dark'); }
 
-function toggleDark() {
-  document.documentElement.classList.toggle('dark');
+async function getCurrentUserId() {
+  const { data: { user } } = await supabase.auth.getUser();
+  return user?.id || null;
 }
 
-/* ======================
- * Core do cofre (local)
- * ====================== */
-async function lock() {
-  session = { key: null, items: [] };
+/* Core local */
+async function lock(){
+  session = { key:null, items:[] };
   els.mode.textContent  = 'Bloqueado';
   els.count.textContent = '0';
   els.panel.classList.remove('hidden');
   els.list.classList.add('hidden');
 }
 
-async function unlock(pwd) {
-  // meta = objeto cifrado do localStorage: { salt, iter, data: { iv, ct } }
-  let meta = load();
-  if (!meta) {
-    // Primeiro uso: cria meta vazio cifrado
+async function unlock(pwd){
+  let meta = load(); // { salt, iter, data:{iv,ct} }
+  if(!meta){
     const salt = randSalt();
     const key  = await deriveKey(pwd, salt);
-    const data = await encryptJson(key, []); // começa sem itens
+    const data = await encryptJson(key, []);
     meta = { salt: bufToB64(salt), iter: 200000, data };
     save(meta);
   }
-
   const salt = b64ToBuf(meta.salt);
-  const key  = await deriveKey(pwd, salt, meta.iter || 200000);
-
-  try {
+  const key  = await deriveKey(pwd, salt, meta.iter||200000);
+  try{
     const items = await decryptJson(key, meta.data);
     session.key   = key;
     session.items = items || [];
@@ -119,54 +90,44 @@ async function unlock(pwd) {
     els.count.textContent = String(session.items.length);
     els.panel.classList.add('hidden');
     els.list.classList.remove('hidden');
-  } catch {
+  }catch{
     alert('Senha mestre incorreta.');
   }
 }
 
-/* =========================================
- * 4.2) Persistência local + Sync Supabase
- * ========================================= */
-async function syncVaultToSupabase() {
+/* 4.2) Sync no Supabase */
+async function syncVaultToSupabase(){
   const userId = await getCurrentUserId();
-  if (!userId) return;                 // precisa estar logado (RLS)
-
-  const meta = load();                 // pega o objeto cifrado salvo localmente
-  if (!meta) return;
-
-  // upsert no schema safeplus
+  if(!userId) return;          // requer login
+  const meta = load();
+  if(!meta) return;
   const { error } = await supabase
     .from('safeplus.vaults')
     .upsert({ user_id: userId, ciphertext: meta })
     .eq('user_id', userId);
-
-  if (error) console.error('Erro ao sincronizar vault:', error);
+  if(error) console.error('Erro ao sincronizar vault:', error);
 }
 
-async function persist() {
+async function persist(){
   const meta = load();
-  if (!session.key) return;
-
+  if(!session.key) return;
   const data = await encryptJson(session.key, session.items);
-  save({ ...(meta || {}), data });
+  save({ ...(meta||{}), data });
   els.count.textContent = String(session.items.length);
-
-  // ► SINCRONIZAÇÃO (4.2)
+  // dispara sync
   await syncVaultToSupabase();
 }
 
-/* ==========================
- * Renderização da lista (UI)
- * ========================== */
-function render() {
-  const q = (els.filter.value || '').toLowerCase();
+/* Render */
+function render(){
+  const q = (els.filter.value||'').toLowerCase();
   els.list.innerHTML = '';
 
-  const items = session.items.filter(
-    i => i.name?.toLowerCase().includes(q) || i.user?.toLowerCase().includes(q)
+  const items = session.items.filter(i =>
+    i.name?.toLowerCase().includes(q) || i.user?.toLowerCase().includes(q)
   );
 
-  for (const it of items) {
+  for(const it of items){
     const card = document.createElement('div');
     card.className = 'card rounded-xl p-4 space-y-3';
     card.innerHTML = `
@@ -187,38 +148,32 @@ function render() {
     els.list.appendChild(card);
   }
 
-  // Ações dos cards
-  els.list.querySelectorAll('.btn-copy').forEach(b => b.addEventListener('click', async e => {
+  // ações
+  els.list.querySelectorAll('.btn-copy').forEach(b => b.addEventListener('click', async e=>{
     const id = e.currentTarget.getAttribute('data-id');
     const it = session.items.find(x => x.id === id);
-    if (!it) return;
-    try {
+    if(!it) return;
+    try{
       await navigator.clipboard.writeText(it.pass || '');
       e.currentTarget.textContent = 'Copiado!';
-      setTimeout(() => e.currentTarget.textContent = 'Copiar Senha', 1200);
-    } catch {
-      alert('Seu navegador bloqueou a cópia.');
-    }
+      setTimeout(()=> e.currentTarget.textContent='Copiar Senha', 1200);
+    }catch{ alert('Seu navegador bloqueou a cópia.'); }
   }));
-
-  els.list.querySelectorAll('.btn-reveal').forEach(b => b.addEventListener('click', e => {
+  els.list.querySelectorAll('.btn-reveal').forEach(b => b.addEventListener('click', e=>{
     const id = e.currentTarget.getAttribute('data-id');
     const it = session.items.find(x => x.id === id);
-    if (!it) return;
+    if(!it) return;
     alert(`Senha de ${it.name}:\n\n${it.pass}`);
   }));
-
-  els.list.querySelectorAll('.btn-edit').forEach(b => b.addEventListener('click', e => {
+  els.list.querySelectorAll('.btn-edit').forEach(b => b.addEventListener('click', e=>{
     const id = e.currentTarget.getAttribute('data-id');
     const it = session.items.find(x => x.id === id);
     openModal(it);
   }));
 }
 
-/* ======================
- * Modal (novo/editar)
- * ====================== */
-function openModal(it) {
+/* Modal */
+function openModal(it){
   editingId = it?.id || null;
   m.title.textContent = editingId ? 'Editar Item' : 'Novo Item';
   m.name.value = it?.name || '';
@@ -227,56 +182,39 @@ function openModal(it) {
   m.url.value  = it?.url  || '';
   m.icon.value = it?.icon || '';
   m.fav.checked = !!it?.fav;
-
   m.del.classList.toggle('hidden', !editingId);
   modal.showModal();
 }
-function closeModal() { modal.close(); }
+function closeModal(){ modal.close(); }
 
-/* ==========================
- * 4.3) Restore do servidor
- * ========================== */
-async function getCurrentUserId() {
-  const { data: { user } } = await supabase.auth.getUser();
-  return user?.id || null;
-}
-
-async function pullVaultFromSupabase() {
+/* 4.3) Restaurar do servidor */
+async function pullVaultFromSupabase(){
   const userId = await getCurrentUserId();
-  if (!userId) return null;
-
+  if(!userId) return null;
   const { data, error } = await supabase
     .from('safeplus.vaults')
     .select('ciphertext')
     .single();
-
-  if (error) { console.error('Erro ao ler vault:', error); return null; }
+  if(error){ console.error('Erro ao ler vault:', error); return null; }
   return data?.ciphertext || null;
 }
-
-async function restoreFromServerAndUnlock() {
+async function restoreFromServerAndUnlock(){
   const remoteMeta = await pullVaultFromSupabase();
-  if (!remoteMeta) return alert('Não há cofre no servidor para este usuário.');
-
-  // Substitui o meta local e volta para tela de desbloqueio
+  if(!remoteMeta) return alert('Não há cofre no servidor para este usuário.');
   save(remoteMeta);
   alert('Cofre baixado! Agora desbloqueie com a sua senha mestre.');
   await lock();
 }
 
-/* ======================
- * Event Listeners (UI)
- * ====================== */
-els.unlock?.addEventListener('click', () => {
+/* Eventos UI */
+els.unlock?.addEventListener('click', ()=>{
   const p = els.master.value.trim();
-  if (!p) return alert('Informe a senha mestre.');
+  if(!p) return alert('Informe a senha mestre.');
   unlock(p);
 });
-
-els.add?.addEventListener('click', () => openModal(null));
-m.gen?.addEventListener('click', () => m.pass.value = gen());
-
-m.save?.addEventListener('click', async () => {
+els.add?.addEventListener('click', ()=> openModal(null));
+m.gen?.addEventListener('click', ()=> m.pass.value = gen());
+m.save?.addEventListener('click', async ()=>{
   const payload = {
     id:   editingId || crypto.randomUUID(),
     name: m.name.value.trim(),
@@ -286,133 +224,74 @@ m.save?.addEventListener('click', async () => {
     icon: m.icon.value.trim(),
     fav:  m.fav.checked
   };
-
-  if (editingId) {
+  if(editingId){
     const i = session.items.findIndex(x => x.id === editingId);
-    if (i >= 0) session.items[i] = payload;
+    if(i >= 0) session.items[i] = payload;
   } else {
     session.items.unshift(payload);
   }
-
   await persist();
   render();
   closeModal();
 });
-
-m.del?.addEventListener('click', async () => {
-  if (!editingId) return;
-  if (!confirm('Excluir este item?')) return;
+m.del?.addEventListener('click', async ()=>{
+  if(!editingId) return;
+  if(!confirm('Excluir este item?')) return;
   session.items = session.items.filter(x => x.id !== editingId);
   await persist();
   render();
   closeModal();
 });
-
 els.lock?.addEventListener('click', lock);
-
-els.exp?.addEventListener('click', () => {
+els.exp?.addEventListener('click', ()=>{
   const blob = new Blob([exportVault()], { type: 'application/json' });
   const url  = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = 'safeplus_export.json'; a.click();
   URL.revokeObjectURL(url);
 });
-
-els.imp?.addEventListener('click', async () => {
+els.imp?.addEventListener('click', async ()=>{
   const [h] = await window.showOpenFilePicker({
-    types: [{ description: 'JSON', accept: { 'application/json': ['.json'] } }]
+    types:[{ description:'JSON', accept:{ 'application/json':['.json'] } }]
   });
   const data = await (await h.getFile()).text();
   importVault(data);
   await lock();
   alert('Importado! Desbloqueie novamente.');
 });
-
 els.filter?.addEventListener('input', render);
 els.dark?.addEventListener('click', toggleDark);
-
-// ► Botão "Restaurar do servidor"
 els.restore?.addEventListener('click', restoreFromServerAndUnlock);
 
-/* ===============================
- * 2) Autenticação (email/senha)
- * =============================== */
+/* Auth (e‑mail/senha) */
 const authEmail    = document.getElementById('authEmail');
 const authPassword = document.getElementById('authPassword');
 const btnSignUp    = document.getElementById('btnSignUp');
 const btnSignIn    = document.getElementById('btnSignIn');
 
-btnSignUp?.addEventListener('click', async () => {
+btnSignUp?.addEventListener('click', async ()=>{
   const email = authEmail.value.trim();
   const pass  = authPassword.value.trim();
-  if (!email || !pass) return alert('Preencha email e senha.');
-
+  if(!email || !pass) return alert('Preencha email e senha.');
   const { error } = await supabase.auth.signUp({ email, password: pass });
-  if (error) return alert('Falha ao criar conta: ' + error.message);
-  alert('Conta criada! Verifique seu email (se o projeto exigir confirmação).');
+  if(error) return alert('Falha ao criar conta: ' + error.message);
+  alert('Conta criada! Verifique seu email (se exigida confirmação).');
 });
-
-btnSignIn?.addEventListener('click', async () => {
+btnSignIn?.addEventListener('click', async ()=>{
   const email = authEmail.value.trim();
   const pass  = authPassword.value.trim();
-  if (!email || !pass) return alert('Preencha email e senha.');
-
+  if(!email || !pass) return alert('Preencha email e senha.');
   const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
-  if (error) return alert('Falha ao entrar: ' + error.message);
+  if(error) return alert('Falha ao entrar: ' + error.message);
   alert('Autenticado com sucesso!');
 });
 
-/* =======================
- * Inicialização da tela
- * ======================= */
+/* Inicialização */
 lock();
 
-/* ==========================================================
- * 5) OPCIONAL – Itens no Supabase (sync granular por item)
- *    Obs: os itens devem ser enviados cifrados (mesmo padrão)
- * ========================================================== */
-
-// Gerar hash/keyword (nunca texto puro) para campo auxiliar de busca
-async function makeSearchTag(text) {
-  const norm = (text || '').toLowerCase().trim();
-  const buf  = new TextEncoder().encode(norm);
-  const dig  = await crypto.subtle.digest('SHA-256', buf);
-  return btoa(String.fromCharCode(...new Uint8Array(dig))); // base64 do hash
-}
-
-async function saveItemCipher(itemCipher, searchText = null) {
-  const userId = await getCurrentUserId();
-  if (!userId) return;
-  const search_tag = searchText ? await makeSearchTag(searchText) : null;
-
-  const { error } = await supabase
-    .from('safeplus.vault_items')
-    .insert({ user_id: userId, ciphertext: itemCipher, search_tag });
-  if (error) console.error('saveItemCipher:', error);
-}
-
-async function listItemCiphers() {
-  const { data, error } = await supabase
-    .from('safeplus.vault_items')
-    .select('id, ciphertext, updated_at')
-    .order('updated_at', { ascending: false });
-  if (error) { console.error('listItemCiphers:', error); return []; }
-  return data || [];
-}
-
-async function updateItemCipher(id, itemCipher, searchText = null) {
-  const search_tag = searchText ? await makeSearchTag(searchText) : null;
-  const { error } = await supabase
-    .from('safeplus.vault_items')
-    .update({ ciphertext: itemCipher, search_tag })
-    .eq('id', id);
-  if (error) console.error('updateItemCipher:', error);
-}
-
-async function deleteItemCipher(id) {
-  const { error } = await supabase
-    .from('safeplus.vault_items')
-    .delete()
-    .eq('id', id);
-  if (error) console.error('deleteItemCipher:', error);
-}
+/* (Opcional) Helpers para itens no Supabase (sync granular) */
+// async function makeSearchTag(text) { /* ... */ }
+// async function saveItemCipher(itemCipher, searchText=null) { /* ... */ }
+// async function listItemCiphers() { /* ... */ }
+// async function updateItemCipher(id, itemCipher, searchText=null) { /* ... */ }
+// async function deleteItemCipher(id) { /* ... */ }
