@@ -25,13 +25,30 @@
 
     <main class="max-w-6xl mx-auto px-4 py-8 grid md:grid-cols-12 gap-6">
       <aside class="md:col-span-4 lg:col-span-3 space-y-4">
+
+        <!-- 🆕 Autenticação Supabase -->
+        <section class="rounded-xl border border-white/10 p-4 bg-white/5">
+          <h2 class="font-semibold mb-2">Entrar no SAFEplus</h2>
+          <div class="grid sm:grid-cols-3 gap-3">
+            <input id="authEmail" type="email" placeholder="Email" class="rounded-md bg-white/10 border border-white/10 px-3 py-2 text-sm">
+            <input id="authPassword" type="password" placeholder="Senha" class="rounded-md bg-white/10 border border-white/10 px-3 py-2 text-sm">
+            <div class="flex gap-2">
+              <button id="btnSignUp" class="flex-1 px-3 py-2 rounded-md bg-white/10 hover:bg-white/15 text-sm">Criar conta</button>
+              <button id="btnSignIn" class="flex-1 px-3 py-2 rounded-md bg-brand-600 hover:bg-brand-700 text-sm text-white">Entrar</button>
+            </div>
+          </div>
+          <p class="mt-2 text-xs opacity-70">Após logar, o cofre cifrado pode ser sincronizado no Supabase (RLS por usuário).</p>
+        </section>
+
         <section class="rounded-xl border border-white/10 p-4 bg-white/5">
           <h2 class="font-semibold mb-2">Status do Cofre</h2>
           <div class="text-sm opacity-80">Modo: <span id="vaultMode" class="font-medium">Bloqueado</span></div>
           <div class="text-sm opacity-80">Itens: <span id="vaultCount" class="font-medium">0</span></div>
-          <div class="mt-3 flex gap-2">
-            <button id="btn-lock" class="flex-1 px-3 py-2 rounded-md bg-white/10 hover:bg-white/15 text-sm">Bloquear</button>
+          <div class="mt-3 grid grid-cols-2 gap-2">
+            <button id="btn-lock" class="px-3 py-2 rounded-md bg-white/10 hover:bg-white/15 text-sm">Bloquear</button>
             <button id="btn-export" class="px-3 py-2 rounded-md bg-white/10 hover:bg-white/15 text-sm">Exportar</button>
+            <!-- 🆕 Botão de restauração do servidor -->
+            <button id="btn-restore" class="col-span-2 px-3 py-2 rounded-md bg-white/10 hover:bg-white/15 text-sm">Restaurar do servidor</button>
           </div>
         </section>
 
